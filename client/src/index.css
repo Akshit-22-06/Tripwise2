@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #0f172a;
+    background-color: #f8fafc;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    color: #1e293b;
+    background-color: #f8fafc;
+  }
+
+  /* Clear, disciplined typographic hierarchy */
+  h1 {
+    font-size: 1.5rem; /* 24px */
+    line-height: 2rem;
+    font-weight: 600;
+    color: #0f172a;
+    letter-spacing: -0.015em;
+  }
+
+  h2 {
+    font-size: 1.25rem; /* 20px */
+    line-height: 1.75rem;
+    font-weight: 600;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    font-size: 1rem; /* 16px */
+    line-height: 1.5rem;
+    font-weight: 600;
+    color: #0f172a;
+  }
+
+  h4 {
+    font-size: 0.875rem; /* 14px */
+    line-height: 1.25rem;
+    font-weight: 600;
+    color: #0f172a;
+  }
+}
+
+/* Subtle, standard scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  z-index: 10;
+  font-family: inherit;
+}
