@@ -9,6 +9,7 @@ const AdminDashboard = () => {
   const [report, setReport] = useState(null);
   const [usersList, setUsersList] = useState([]);
   const [pendingVerifications, setPendingVerifications] = useState([]);
+  const [pendingServices, setPendingServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeSubTab, setActiveSubTab] = useState("users");
 
@@ -21,7 +22,14 @@ const AdminDashboard = () => {
       setUsersList(usersRes.data.data || []);
 
       const verifRes = await adminAPI.getVerifications();
-      setPendingVerifications(verifRes.data.data || []);
+      const rawData = verifRes.data.data;
+      if (Array.isArray(rawData)) {
+        setPendingVerifications(rawData);
+        setPendingServices([]);
+      } else if (rawData) {
+        setPendingVerifications(rawData.verifications || []);
+        setPendingServices(rawData.services || []);
+      }
     } catch (err) {
       console.error("Failed to load administrative data:", err);
     } finally {
@@ -42,6 +50,18 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleProcessService = async (serviceId, status) => {
+    try {
+      await adminAPI.processVerification({
+        serviceId,
+        status,
+      });
+      await fetchAdminData();
+    } catch (err) {
+      alert("Failed to update service status.");
+    }
+  };
+
   const handleProcessVerification = async (verificationId, status) => {
     const notes =
       status === "APPROVED"
@@ -57,6 +77,13 @@ const AdminDashboard = () => {
     } catch (err) {
       alert("Failed to update verification status.");
     }
+  };
+
+  const getServiceRate = (svc) => {
+    if (svc.pricePerNight) return `${svc.pricePerNight.toLocaleString()} INR / night`;
+    if (svc.pricePerMeal) return `${svc.pricePerMeal.toLocaleString()} INR / meal`;
+    if (svc.hourlyRate) return `${svc.hourlyRate.toLocaleString()} INR / hr`;
+    return svc.priceRange || "Standard Rate";
   };
 
   const handleCompileReport = () => {
@@ -78,6 +105,8 @@ const AdminDashboard = () => {
       </div>
     );
   }
+
+  const totalPending = pendingServices.length + pendingVerifications.length;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -140,9 +169,9 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Sub Tabs Layout */}
+      {/* Subtabs & Content */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Navigation Sidebar */}
+        {/* Subtabs Sidebar */}
         <div className="lg:col-span-3 bg-white border border-slate-200 rounded-md p-1.5 space-y-0.5 text-xs font-medium">
           <button
             type="button"
@@ -179,18 +208,18 @@ const AdminDashboard = () => {
           >
             <div className="flex items-center space-x-2">
               <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Verifications Queue</span>
+              <span>Pending Reviews</span>
             </div>
-            {pendingVerifications.length > 0 && (
+            {totalPending > 0 && (
               <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                {pendingVerifications.length}
+                {totalPending}
               </span>
             )}
           </button>
         </div>
 
         {/* Tab Content Column */}
-        <div className="lg:col-span-9 space-y-3">
+        <div className="lg:col-span-9 space-y-5">
           {/* Subtab 1: Users */}
           {activeSubTab === "users" && (
             <div className="space-y-3">
@@ -258,73 +287,165 @@ const AdminDashboard = () => {
 
           {/* Subtab 2: Verifications Queue */}
           {activeSubTab === "verifications" && (
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-slate-900">
-                Pending Merchant Applications ({pendingVerifications.length})
-              </h2>
-
-              {pendingVerifications.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-md p-8 text-center text-xs text-slate-400">
-                  No merchant applications awaiting administrative verification.
+            <div className="space-y-6">
+              {/* Section A: Pending Services */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    Pending Service Listings ({pendingServices.length})
+                  </h2>
+                  <span className="text-xs text-slate-500">
+                    Services listed by merchants awaiting verification
+                  </span>
                 </div>
-              ) : (
-                <div className="bg-white border border-slate-200 rounded-md overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
-                      <tr>
-                        <th className="py-2.5 px-3.5">Applicant / Owner</th>
-                        <th className="py-2.5 px-3.5">Contact Particulars</th>
-                        <th className="py-2.5 px-3.5">Business Reg #</th>
-                        <th className="py-2.5 px-3.5">Review Status</th>
-                        <th className="py-2.5 px-3.5 text-right">Review Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {pendingVerifications.map((ver) => (
-                        <tr key={ver._id} className="hover:bg-slate-50">
-                          <td className="py-2.5 px-3.5 font-medium text-slate-900">
-                            {ver.ownerId?.name || "Applicant"}
-                          </td>
-                          <td className="py-2.5 px-3.5 text-slate-600">
-                            <div>{ver.ownerId?.email}</div>
-                            <div className="text-[10px] text-slate-400">
-                              {ver.ownerId?.phone || "No phone provided"}
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3.5 font-mono text-[11px] text-slate-800">
-                            {ver.businessRegNumber}
-                          </td>
-                          <td className="py-2.5 px-3.5">
-                            <span className="px-2 py-0.5 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded">
-                              Pending Review
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3.5 text-right">
-                            <div className="inline-flex space-x-1.5">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleProcessVerification(ver._id, "REJECTED")
-                                }
-                                className="px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded"
-                              >
-                                Reject
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleProcessVerification(ver._id, "APPROVED")
-                                }
-                                className="px-2.5 py-1 text-[11px] font-medium text-white bg-slate-900 hover:bg-slate-800 rounded"
-                              >
-                                Approve
-                              </button>
-                            </div>
-                          </td>
+
+                {pendingServices.length === 0 ? (
+                  <div className="bg-white border border-slate-200 rounded-md p-6 text-center text-xs text-slate-400">
+                    No service listings awaiting administrator review.
+                  </div>
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-md overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
+                        <tr>
+                          <th className="py-2.5 px-3.5">Service Listing</th>
+                          <th className="py-2.5 px-3.5">Category</th>
+                          <th className="py-2.5 px-3.5">Merchant / Owner</th>
+                          <th className="py-2.5 px-3.5">Pricing</th>
+                          <th className="py-2.5 px-3.5">Review Status</th>
+                          <th className="py-2.5 px-3.5 text-right">Action</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {pendingServices.map((svc) => (
+                          <tr key={svc._id} className="hover:bg-slate-50">
+                            <td className="py-2.5 px-3.5 font-medium text-slate-900">
+                              <div className="flex items-center space-x-2.5">
+                                {svc.image && (
+                                  <img
+                                    src={svc.image}
+                                    alt={svc.name}
+                                    className="w-8 h-8 rounded object-cover border border-slate-200 flex-shrink-0"
+                                  />
+                                )}
+                                <span>{svc.name}</span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3.5">
+                              <span className="px-2 py-0.5 text-[10px] font-medium bg-slate-100 rounded text-slate-700 capitalize">
+                                {svc.serviceType}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3.5 text-slate-600">
+                              <div className="font-medium text-slate-800">
+                                {svc.ownerId?.name || "Merchant"}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                {svc.ownerId?.email || "No email"}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3.5 font-medium text-slate-800">
+                              {getServiceRate(svc)}
+                            </td>
+                            <td className="py-2.5 px-3.5">
+                              <span className="px-2 py-0.5 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded">
+                                Pending Review
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3.5 text-right">
+                              <div className="inline-flex space-x-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleProcessService(svc._id, "REJECTED")
+                                  }
+                                  className="px-2.5 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition"
+                                >
+                                  Reject
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleProcessService(svc._id, "APPROVED")
+                                  }
+                                  className="px-3 py-1 text-[11px] font-medium text-white bg-slate-900 hover:bg-slate-800 rounded transition"
+                                >
+                                  Approve
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Section B: Merchant Organization Verifications */}
+              {pendingVerifications.length > 0 && (
+                <div className="space-y-3 pt-2">
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    Business Applications ({pendingVerifications.length})
+                  </h2>
+                  <div className="bg-white border border-slate-200 rounded-md overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
+                        <tr>
+                          <th className="py-2.5 px-3.5">Applicant / Owner</th>
+                          <th className="py-2.5 px-3.5">Contact Particulars</th>
+                          <th className="py-2.5 px-3.5">Business Reg #</th>
+                          <th className="py-2.5 px-3.5">Review Status</th>
+                          <th className="py-2.5 px-3.5 text-right">Review Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {pendingVerifications.map((ver) => (
+                          <tr key={ver._id} className="hover:bg-slate-50">
+                            <td className="py-2.5 px-3.5 font-medium text-slate-900">
+                              {ver.ownerId?.name || "Applicant"}
+                            </td>
+                            <td className="py-2.5 px-3.5 text-slate-600">
+                              <div>{ver.ownerId?.email}</div>
+                              <div className="text-[10px] text-slate-400">
+                                {ver.ownerId?.phone || "No phone provided"}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3.5 font-mono text-[11px] text-slate-800">
+                              {ver.businessRegNumber}
+                            </td>
+                            <td className="py-2.5 px-3.5">
+                              <span className="px-2 py-0.5 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded">
+                                Pending Review
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3.5 text-right">
+                              <div className="inline-flex space-x-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleProcessVerification(ver._id, "REJECTED")
+                                  }
+                                  className="px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded"
+                                >
+                                  Reject
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleProcessVerification(ver._id, "APPROVED")
+                                  }
+                                  className="px-2.5 py-1 text-[11px] font-medium text-white bg-slate-900 hover:bg-slate-800 rounded"
+                                >
+                                  Approve
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

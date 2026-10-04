@@ -45,10 +45,17 @@ exports.getPendingVerifications = async (req, res, next) => {
       .populate('ownerId', 'name email phone')
       .sort({ createdAt: 1 });
 
+    const services = await TourismService.find({ isVerified: false })
+      .populate('ownerId', 'name email phone')
+      .sort({ createdAt: -1 });
+
     res.status(200).json({
       success: true,
-      count: verifications.length,
-      data: verifications,
+      count: verifications.length + services.length,
+      data: {
+        verifications,
+        services,
+      },
     });
   } catch (err) {
     next(err);
@@ -57,12 +64,36 @@ exports.getPendingVerifications = async (req, res, next) => {
 
 exports.processVerification = async (req, res, next) => {
   try {
-    const { verificationId, status, notes } = req.body;
+    const { verificationId, serviceId, status, notes } = req.body;
 
     if (!['APPROVED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid verification status target' });
     }
 
+    // Process single TourismService listing review
+    if (serviceId) {
+      if (status === 'APPROVED') {
+        const service = await TourismService.findByIdAndUpdate(
+          serviceId,
+          { isVerified: true },
+          { new: true }
+        );
+        return res.status(200).json({
+          success: true,
+          message: 'Service listing verified and published successfully',
+          data: service,
+        });
+      } else {
+        const service = await TourismService.findByIdAndDelete(serviceId);
+        return res.status(200).json({
+          success: true,
+          message: 'Service listing rejected and removed',
+          data: service,
+        });
+      }
+    }
+
+    // Process merchant organization verification
     const verification = await BusinessVerification.findById(verificationId);
     if (!verification) {
       return res.status(404).json({ success: false, message: 'Verification request not found' });
@@ -73,7 +104,6 @@ exports.processVerification = async (req, res, next) => {
     await verification.save();
 
     if (status === 'APPROVED') {
-
       await TourismService.updateMany({ ownerId: verification.ownerId }, { isVerified: true });
     }
 
