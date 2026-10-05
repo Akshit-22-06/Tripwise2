@@ -1,47 +1,70 @@
 const Itinerary = require('../models/Itinerary');
 const Destination = require('../models/Destination');
-const { generateLiveItinerary } = require('../services/geminiService');
+const { planTrip } = require('../services/tripPlannerService');
 
+// @desc    Generate dynamic trip using real flight, train, hotel, places, and AI scheduling
+// @route   POST /api/planner/generate
+// @access  Private
 exports.generateTrip = async (req, res, next) => {
   try {
-    const { destinationId, totalDays, targetBudget, travelStyle, preferences } = req.body;
+    const {
+      destination,
+      destinationId,
+      startingLocation,
+      startDate,
+      totalDays,
+      travelers,
+      targetBudget,
+      travelStyle,
+      preferences,
+    } = req.body;
 
-    if (!destinationId || !totalDays || !targetBudget) {
+    if (!destination && !destinationId) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide destinationId, totalDays, and targetBudget',
+        message: 'Please provide a destination (city name or destinationId)',
       });
     }
 
-    const destination = await Destination.findById(destinationId);
-    if (!destination) {
-      return res.status(404).json({ success: false, message: 'Selected destination not found' });
+    if (!totalDays || !targetBudget) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide totalDays and targetBudget',
+      });
     }
 
-    const itineraryData = await generateLiveItinerary({
-      destination: `${destination.name}, ${destination.city}`,
-      durationDays: parseInt(totalDays),
-      budgetTier: targetBudget > 50000 ? 'Luxury' : targetBudget > 20000 ? 'Mid-range' : 'Budget',
-      travelStyle: travelStyle || 'urban',
-      preferences: preferences || [],
+    const tripPlan = await planTrip({
+      destination,
+      destinationId,
+      startingLocation,
+      startDate,
+      totalDays: parseInt(totalDays, 10),
+      travelers: parseInt(travelers, 10) || 1,
+      targetBudget: parseFloat(targetBudget),
+      travelStyle,
+      preferences,
     });
 
     res.status(200).json({
       success: true,
       data: {
-        destinationId: destination._id,
-        destinationName: destination.name,
-        totalDays: itineraryData.totalDays || totalDays,
-        targetBudget: itineraryData.targetBudget || targetBudget,
-        estimatedCost: itineraryData.totalEstimatedCost || itineraryData.estimatedCost,
-
-        dayPlans: (itineraryData.dailySchedule || itineraryData.dayPlans || []).map((day) => ({
-          dayNumber: day.dayNumber,
-          morning: typeof day.morning === 'object' ? day.morning.activity : day.morning,
-          afternoon: typeof day.afternoon === 'object' ? day.afternoon.activity : day.afternoon,
-          evening: typeof day.evening === 'object' ? day.evening.activity : day.evening,
-          dailyEstimatedCost: day.dailyTotal || day.dailyEstimatedCost || 0,
-        })),
+        destinationId: tripPlan.destination.id,
+        destinationName: tripPlan.destination.name,
+        destination: tripPlan.destination,
+        startingLocation: tripPlan.startingLocation,
+        startDate: tripPlan.startDate,
+        totalDays: tripPlan.totalDays,
+        travelers: tripPlan.travelers,
+        travelStyle: tripPlan.travelStyle,
+        targetBudget: tripPlan.budgetBreakdown.userBudget,
+        estimatedCost: tripPlan.budgetBreakdown.estimatedTotalCost,
+        transportation: tripPlan.transportation,
+        accommodation: tripPlan.accommodation,
+        places: tripPlan.places,
+        tourismServices: tripPlan.tourismServices,
+        budgetBreakdown: tripPlan.budgetBreakdown,
+        dayPlans: tripPlan.dayPlans,
+        bookingPayloads: tripPlan.bookingPayloads,
       },
     });
   } catch (err) {
@@ -95,15 +118,35 @@ exports.calculateBudgetBreakdown = async (req, res, next) => {
 
 exports.saveItinerary = async (req, res, next) => {
   try {
-    const { destinationId, totalDays, targetBudget, estimatedCost, dayPlans } = req.body;
-
-    const itinerary = await Itinerary.create({
-      userId: req.user.id,
+    const {
       destinationId,
+      destinationName,
+      startingLocation,
       totalDays,
+      travelers,
+      travelStyle,
       targetBudget,
       estimatedCost,
       dayPlans,
+      transportation,
+      accommodation,
+      budgetBreakdown,
+    } = req.body;
+
+    const itinerary = await Itinerary.create({
+      userId: req.user.id,
+      destinationId: destinationId || null,
+      destinationName: destinationName || '',
+      startingLocation: startingLocation || '',
+      totalDays: totalDays || 3,
+      travelers: travelers || 1,
+      travelStyle: travelStyle || 'standard',
+      targetBudget: targetBudget || 0,
+      estimatedCost: estimatedCost || 0,
+      transportation: transportation || null,
+      accommodation: accommodation || null,
+      budgetBreakdown: budgetBreakdown || null,
+      dayPlans: dayPlans || [],
       isSaved: true,
     });
 

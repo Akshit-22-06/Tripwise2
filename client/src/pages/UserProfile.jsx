@@ -244,7 +244,7 @@ const UserProfile = () => {
                     >
                       <div>
                         <h3 className="text-sm font-semibold text-slate-900">
-                          {plan.destinationId?.name || "Custom Trip"}
+                          {plan.destinationName || plan.destinationId?.name || "Custom Trip"}
                         </h3>
                         <p className="text-slate-500 mt-0.5">
                           Duration: {plan.totalDays} Days &bull; Target Budget:{" "}

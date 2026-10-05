@@ -97,7 +97,7 @@ const generateLiveItinerary = async ({ destination, durationDays, budgetTier, tr
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const systemPrompt = `You are a travel itinerary planner. Generate a structured day-wise itinerary in strictly valid JSON format.
 Do NOT output markdown code fences (like \`\`\`json). The response must be raw parseable JSON.
@@ -142,6 +142,142 @@ Calculate realistic expenses in INR.`;
   }
 };
 
+const generateItineraryFromRealData = async ({
+  destinationName,
+  destinationCity,
+  startingLocation,
+  durationDays = 3,
+  travelers = 1,
+  budget = 15000,
+  travelStyle = 'Standard',
+  transportation = null,
+  accommodation = null,
+  places = [],
+}) => {
+  const days = Math.min(Math.max(parseInt(durationDays) || 3, 1), 14);
+  const attractionNames = (places || [])
+    .map((p) => p.name || p.address)
+    .filter((n) => n && !n.includes('Point of Interest'));
+  const hotelName = accommodation?.name || 'Local Hotel Accommodation';
+  const transportSummary = transportation
+    ? `${transportation.type || 'Transit'}: ${transportation.title || 'Direct route'} (${transportation.duration || 'convenient timing'})`
+    : 'Local transit';
+
+  const fallbackRealItinerary = () => {
+    const dayPlans = [];
+    const dailyCost = Math.round(budget / days);
+
+    for (let i = 1; i <= days; i++) {
+      let morning = '';
+      let afternoon = '';
+      let evening = '';
+
+      if (i === 1) {
+        morning = `Depart from ${startingLocation} and arrive in ${destinationName} via ${transportSummary}.`;
+        afternoon = `Check in at ${hotelName}. ${attractionNames[0] ? `Take a walking tour to ${attractionNames[0]}.` : `Explore central ${destinationCity} and settle in.`}`;
+        evening = `Dinner at an authentic local restaurant in ${destinationCity} and evening orientation stroll.`;
+      } else if (i === days) {
+        const lastAttraction =
+          attractionNames[(i - 1) % (attractionNames.length || 1)] ||
+          'local bazaar';
+        morning = `Enjoy breakfast at ${hotelName}. Visit ${lastAttraction} for sightseeing and souvenir shopping.`;
+        afternoon = `Check out from ${hotelName}. Final leisurely lunch in ${destinationCity}.`;
+        evening = `Commence return journey back to ${startingLocation}. Safe travels!`;
+      } else {
+        const att1 =
+          attractionNames[(i * 2 - 2) % (attractionNames.length || 1)] ||
+          `Heritage landmark in ${destinationCity}`;
+        const att2 =
+          attractionNames[(i * 2 - 1) % (attractionNames.length || 1)] ||
+          `Scenic nature viewpoint in ${destinationCity}`;
+        morning = `Morning excursion to ${att1}. Experience local culture and sights.`;
+        afternoon = `Guided tour of ${att2}. Photo opportunities and local cuisine lunch.`;
+        evening = `Relaxed evening promenade through ${destinationCity} town center and sunset view.`;
+      }
+
+      dayPlans.push({
+        dayNumber: i,
+        theme: `Day ${i}: ${i === 1 ? 'Arrival & Discovery' : i === days ? 'Farewell & Departure' : `${travelStyle} Exploration`}`,
+        morning,
+        afternoon,
+        evening,
+        dailyEstimatedCost: dailyCost,
+      });
+    }
+
+    return {
+      tripTitle: `${days}-Day ${travelStyle} Trip to ${destinationName}`,
+      summary: `A carefully curated ${days}-day itinerary for ${travelers} traveler(s) exploring ${destinationName} from ${startingLocation}.`,
+      dayPlans,
+    };
+  };
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.includes('your_gemini_api_key')) {
+    return fallbackRealItinerary();
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    const systemPrompt = `You are an expert travel planner for TripWise.
+You are given REAL VERIFIED travel data:
+- Destination: ${destinationName} (${destinationCity})
+- Starting Point: ${startingLocation}
+- Duration: ${days} Days
+- Travelers: ${travelers}
+- Recommended Transportation: ${transportSummary}
+- Selected Accommodation: ${hotelName}
+- Verified Attractions (You MUST USE these exact real places in the daily schedule): ${attractionNames.slice(0, 10).join(', ') || 'Local heritage landmarks'}
+
+Strict Rules:
+1. You must NOT invent fake flight numbers, fake train numbers, fake hotel prices, or fictional attractions.
+2. Day 1 MUST start with arrival from ${startingLocation} and check-in at ${hotelName}.
+3. The final day MUST conclude with check-out from ${hotelName} and return journey to ${startingLocation}.
+4. Intervening days MUST feature the verified real attractions listed above for morning, afternoon, and evening activities.
+5. Return strictly valid raw JSON without markdown formatting.
+JSON Schema:
+{
+  "tripTitle": "string",
+  "summary": "string",
+  "dayPlans": [
+    {
+      "dayNumber": number,
+      "theme": "string",
+      "morning": "string",
+      "afternoon": "string",
+      "evening": "string",
+      "dailyEstimatedCost": number
+    }
+  ]
+}`;
+
+    const userPrompt = `Create a ${days}-day ${travelStyle} travel plan for ${travelers} traveler(s) visiting ${destinationName}. Budget: ₹${budget}.`;
+
+    const result = await model.generateContent({
+      contents: [
+        { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
+      ],
+      generationConfig: { responseMimeType: 'application/json' },
+    });
+
+    const responseText = result.response.text();
+    const cleanJson = responseText
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim();
+    return JSON.parse(cleanJson);
+  } catch (err) {
+    console.warn(
+      'Gemini AI planning unavailable, using real data fallback scheduler:',
+      err.message
+    );
+    return fallbackRealItinerary();
+  }
+};
+
 module.exports = {
   generateLiveItinerary,
+  generateItineraryFromRealData,
 };

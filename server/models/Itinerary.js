@@ -33,7 +33,23 @@ const itinerarySchema = new mongoose.Schema(
     destinationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Destination',
-      required: true,
+      required: false,
+    },
+    destinationName: {
+      type: String,
+      default: '',
+    },
+    startingLocation: {
+      type: String,
+      default: '',
+    },
+    travelers: {
+      type: Number,
+      default: 1,
+    },
+    travelStyle: {
+      type: String,
+      default: 'Standard',
     },
     totalDays: {
       type: Number,
@@ -46,6 +62,18 @@ const itinerarySchema = new mongoose.Schema(
     estimatedCost: {
       type: Number,
       required: true,
+    },
+    transportation: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    accommodation: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    budgetBreakdown: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
     dayPlans: [dayPlanSchema],
     isSaved: {

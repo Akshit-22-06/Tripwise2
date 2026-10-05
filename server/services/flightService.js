@@ -71,6 +71,13 @@ const searchFlights = async ({ origin, destination, departureDate, adults = 1, t
       const carrierCode = segment?.operating_carrier?.iata_code || segment?.marketing_carrier?.iata_code || 'AI';
       const flightNum = segment?.operating_carrier_flight_number || '101';
 
+      const rawAmount = parseFloat(offer.total_amount) || 4500;
+      const curr = (offer.total_currency || 'INR').toUpperCase();
+      let inrPrice = Math.round(rawAmount);
+      if (curr === 'GBP') inrPrice = Math.round(rawAmount * 105);
+      else if (curr === 'USD') inrPrice = Math.round(rawAmount * 84);
+      else if (curr === 'EUR') inrPrice = Math.round(rawAmount * 91);
+
       return {
         id: offer.id,
         source: 'Live Duffel API',
@@ -81,8 +88,9 @@ const searchFlights = async ({ origin, destination, departureDate, adults = 1, t
         departureTime: segment?.departing_at,
         arrivalTime: segment?.arriving_at,
         duration: slice?.duration || '2h 30m',
-        price: parseFloat(offer.total_amount),
-        currency: offer.total_currency || 'INR',
+        price: inrPrice,
+        fare: inrPrice,
+        currency: 'INR',
       };
     });
   } catch (err) {
